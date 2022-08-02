@@ -70,14 +70,14 @@ def get_description_content(html):
 	lwrhtml = html.lower()
 
 	celem = 'p'
-	startloc = lwrhtml.find('<' + celem + '>')
+	startloc = lwrhtml.find(f'<{celem}>')
 
 	if startloc == -1:
-		startloc = lwrhtml.find('<' + celem + ' ')
+		startloc = lwrhtml.find(f'<{celem} ')
 
 	if startloc == -1:
 		celem = 'body'
-		startloc = lwrhtml.find('<' + celem)
+		startloc = lwrhtml.find(f'<{celem}')
 
 		if startloc != -1:
 			startloc += 6 # length of <body>
@@ -86,7 +86,7 @@ def get_description_content(html):
 		# no <p> nor <body> tags. bail.
 		return None
 
-	endloc = lwrhtml.rfind('</' + celem + '>')
+	endloc = lwrhtml.rfind(f'</{celem}>')
 
 	if endloc == -1:
 		endloc = len(html)
@@ -104,14 +104,13 @@ def product_urls(cat_entry):
 
 	packages = cat_entry.get('Packages', [])
 
-	pkg_urls = []
-	for package in packages:
-		pkg_urls.append({
+	return [
+		{
 			'url': reposadocommon.rewriteOneURL(package['URL']),
 			'size': package['Size'],
-			})
-
-	return pkg_urls
+		}
+		for package in packages
+	]
 
 @app.route('/products', methods=['GET'])
 def products():
@@ -158,29 +157,29 @@ def new_branch(branchname):
 
 @app.route('/delete_branch/<branchname>', methods=['POST'])
 def delete_branch(branchname):
-    catalog_branches = reposadocommon.getCatalogBranches()
-    if not branchname in catalog_branches:
-        reposadocommon.print_stderr('Branch %s does not exist!', branchname)
-        return
+	catalog_branches = reposadocommon.getCatalogBranches()
+	if branchname not in catalog_branches:
+		reposadocommon.print_stderr('Branch %s does not exist!', branchname)
+		return
 
-    del catalog_branches[branchname]
+	del catalog_branches[branchname]
 
-    # this is not in the common library, so we have to duplicate code
-    # from repoutil
-    for catalog_URL in reposadocommon.pref('AppleCatalogURLs'):
-        localcatalogpath = reposadocommon.getLocalPathNameFromURL(catalog_URL)
-        # now strip the '.sucatalog' bit from the name
-        if localcatalogpath.endswith('.sucatalog'):
-            localcatalogpath = localcatalogpath[0:-10]
-        branchcatalogpath = localcatalogpath + '_' + branchname + '.sucatalog'
-        if os.path.exists(branchcatalogpath):
-            reposadocommon.print_stdout(
-                'Removing %s', os.path.basename(branchcatalogpath))
-            os.remove(branchcatalogpath)
+	    # this is not in the common library, so we have to duplicate code
+	    # from repoutil
+	for catalog_URL in reposadocommon.pref('AppleCatalogURLs'):
+		localcatalogpath = reposadocommon.getLocalPathNameFromURL(catalog_URL)
+		        # now strip the '.sucatalog' bit from the name
+		if localcatalogpath.endswith('.sucatalog'):
+			localcatalogpath = localcatalogpath[:-10]
+		branchcatalogpath = f'{localcatalogpath}_{branchname}.sucatalog'
+		if os.path.exists(branchcatalogpath):
+		    reposadocommon.print_stdout(
+		        'Removing %s', os.path.basename(branchcatalogpath))
+		    os.remove(branchcatalogpath)
 
-    reposadocommon.writeCatalogBranches(catalog_branches)
-    
-    return jsonify(result=True);
+	reposadocommon.writeCatalogBranches(catalog_branches)
+
+	return jsonify(result=True);
 
 @app.route('/add_all/<branchname>', methods=['POST'])
 def add_all(branchname):
@@ -273,11 +272,9 @@ def config_data():
 	else:
 		cd_prods = []
 
-	response_prods = {}
-	for prod_id in check_prods:
-		response_prods.update({prod_id: True if prod_id in cd_prods else False})
-
-	print response_prods
+	response_prods = {prod_id: prod_id in cd_prods for prod_id in check_prods}
+	# catalog_branches = reposadocommon.getCatalogBranches()
+	check_prods = request.json
 
 	return json_response(response_prods)
 
@@ -293,19 +290,15 @@ def remove_config_data(product):
 def main():
 	optlist, args = getopt.getopt(sys.argv[1:], 'db:p:')
 
-	flaskargs = {}
-	flaskargs['host'] = '0.0.0.0'
-	flaskargs['port'] = 8089
-	flaskargs['threaded'] = True
-	
+	flaskargs = {'host': '0.0.0.0', 'port': 8089, 'threaded': True}
 	for o, a in optlist:
-		if o == '-d':
-			flaskargs['debug'] = True
-		elif o == '-b':
+		if o == '-b':
 			flaskargs['host'] = a
+		elif o == '-d':
+			flaskargs['debug'] = True
 		elif o == '-p':
 			flaskargs['port'] = int(a)
-	
+
 	app.run(**flaskargs)
 
 if __name__ == '__main__':
